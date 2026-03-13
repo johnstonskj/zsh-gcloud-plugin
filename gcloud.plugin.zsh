@@ -20,6 +20,8 @@
 # @description Plugin lifecycle functions.
 #
 
+@zplugins_declare_plugin_dependencies mise brew shlog
+
 #
 # @description
 #
@@ -27,23 +29,40 @@
 #
 # @noargs
 #
+# @exitcode 0 Success.
+# @exitcode 1 Directory or file not found in cask.
+# @exitcode 2 Cask not installed in Homebrew.
+#
 # @set GCLOUD_SDK_HOME path The root directory for the SDK installation.
 #
 gcloud_plugin_init() {
     builtin emulate -L zsh
     builtin setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
 
-    # Export any additional environment variables here.
-    @zplugin_save_global gcloud GCLOUD_SDK_HOME
+    # Save and export any additional environment variables here.
+    @zplugins_envvar_save gcloud GCLOUD_SDK_HOME
 
     local cask_path="$(homebrew_cask_prefix gcloud-cli)"
 
     if [[ -n "${cask_path}" ]]; then
-        export GCLOUD_SDK_HOME="${cask_path}/latest/google-cloud-sdk"
+        typeset -g GCLOUD_SDK_HOME="${cask_path}/latest/google-cloud-sdk"
+
+        if [[ -d "${GCLOUD_SDK_HOME}/bin" ]]; then
+            @zplugins_add_to_path gcloud "${GCLOUD_SDK_HOME}/bin"
+        else
+            log_error "zsh-gcloud: no 'bin' directory found in gcloud-cli cask."
+            return 1
+        fi
+
+        if [[ -f "${GCLOUD_SDK_HOME}/completion.zsh.inc" ]]; then
+            source "${GCLOUD_SDK_HOME}/completion.zsh.inc"
+        else
+            log_warning "zsh-gcloud: no 'completion.zsh.inc' found found in gcloud-cli cask."
+        fi
         return 0
     else
-        log-error "zsh-gcloud: the Homebrew cask 'gcloud-cli' does not seem to be installed."
-        return 1
+        log_error "zsh-gcloud: the Homebrew cask 'gcloud-cli' does not seem to be installed."
+        return 2
     fi
 }
 
@@ -60,5 +79,5 @@ gcloud_plugin_unload() {
     builtin emulate -L zsh
 
     # Reset global environment variables.
-    @zplugin_restore_global gcloud GCLOUD_SDK_HOME
+    @zplugins_envvar_restore gcloud GCLOUD_SDK_HOME
 }
